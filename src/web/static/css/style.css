@@ -1,0 +1,238 @@
+/* 全局样式 */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background-color: #f8f9fa;
+}
+
+/* 导航栏 */
+.navbar-brand {
+    font-weight: 600;
+}
+
+/* 卡片样式 */
+.card {
+    border: none;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    transition: box-shadow 0.3s ease;
+}
+
+.card:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.card-header {
+    background-color: #fff;
+    border-bottom: 1px solid #e9ecef;
+    font-weight: 600;
+}
+
+/* 表单样式 */
+.form-control:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+/* 按钮样式 */
+.btn {
+    transition: all 0.3s ease;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.15);
+}
+
+/* 徽章样式 */
+.badge {
+    font-weight: 500;
+    padding: 0.35em 0.65em;
+}
+
+/* 列表样式 */
+.list-group-item {
+    border: 1px solid #e9ecef;
+    transition: background-color 0.3s ease;
+}
+
+.list-group-item:hover {
+    background-color: #f8f9fa;
+}
+
+/* 模态框样式 */
+.modal-content {
+    border: none;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.modal-header {
+    border-bottom: 1px solid #e9ecef;
+}
+
+/* 表格样式 */
+.table {
+    margin-bottom: 0;
+}
+
+.table td {
+    vertical-align: middle;
+}
+
+/* 加载动画 */
+.spinner-border {
+    width: 1rem;
+    height: 1rem;
+    border-width: 0.15em;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .container {
+        padding-left: 15px;
+        padding-right: 15px;
+    }
+
+    .card-body {
+        padding: 1rem;
+    }
+
+    .btn-group {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .btn-group .btn {
+        margin-bottom: 0.5rem;
+    }
+}
+
+/* 自定义滚动条 */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* 预览内容样式 */
+#previewContent {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.6;
+    color: #333;
+}
+
+#previewContent h1,
+#previewContent h2,
+#previewContent h3,
+#previewContent h4,
+#previewContent h5,
+#previewContent h6 {
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+    font-weight: 600;
+    color: #0d6efd;
+}
+
+#previewContent h1 {
+    font-size: 2rem;
+    border-bottom: 2px solid #e9ecef;
+    padding-bottom: 0.5rem;
+}
+
+#previewContent h2 {
+    font-size: 1.5rem;
+    border-bottom: 1px solid #e9ecef;
+    padding-bottom: 0.3rem;
+}
+
+#previewContent p {
+    margin-bottom: 1rem;
+}
+
+#previewContent ul,
+#previewContent ol {
+    margin-bottom: 1rem;
+    padding-left: 2rem;
+}
+
+#previewContent li {
+    margin-bottom: 0.5rem;
+}
+
+#previewContent code {
+    background-color: #f8f9fa;
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.9em;
+    color: #e83e8c;
+}
+
+#previewContent pre {
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 5px;
+    overflow-x: auto;
+    border: 1px solid #e9ecef;
+}
+
+#previewContent pre code {
+    background-color: transparent;
+    padding: 0;
+    color: #333;
+}
+
+#previewContent blockquote {
+    border-left: 4px solid #0d6efd;
+    padding-left: 1rem;
+    margin-left: 0;
+    color: #6c757d;
+    font-style: italic;
+}
+
+#previewContent table {
+    width: 100%;
+    margin-bottom: 1rem;
+    border-collapse: collapse;
+}
+
+#previewContent table th,
+#previewContent table td {
+    padding: 0.75rem;
+    border: 1px solid #dee2e6;
+}
+
+#previewContent table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+}
+
+#previewContent table tr:nth-child(even) {
+    background-color: #f8f9fa;
+}
+
+#previewContent hr {
+    margin: 2rem 0;
+    border: 0;
+    border-top: 1px solid #e9ecef;
+}
+
+#previewContent a {
+    color: #0d6efd;
+    text-decoration: none;
+}
+
+#previewContent a:hover {
+    text-decoration: underline;
+}
+

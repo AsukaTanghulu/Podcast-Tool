@@ -1,0 +1,68 @@
+ai:
+  claude_api_key: ''  # 从环境变量 CLAUDE_API_KEY 读取
+  claude_model: claude-3-sonnet-20240229
+  deepseek_api_key: ''  # 从环境变量 DEEPSEEK_API_KEY 读取
+  deepseek_model: deepseek-chat
+  default_provider: deepseek
+  doubao_api_key: ''  # 从环境变量 DOUBAO_API_KEY 读取
+  doubao_model: doubao-pro-32k
+  max_tokens: 2000
+  openai_api_key: ''  # 从环境变量 OPENAI_API_KEY 读取
+  openai_model: gpt-3.5-turbo
+  qwen_api_key: ''  # 从环境变量 QWEN_API_KEY 读取
+  qwen_model: qwen-plus
+  temperature: 0.7
+  timeout: 60
+analyzer:
+  min_sentence_length: 10
+  paragraph_gap: 2.0
+  top_keywords: 10
+  top_sentences: 5
+app:
+  debug: true
+  host: 127.0.0.1
+  name: 播客分析工具
+  port: 5000
+  version: 1.0.0
+audio_validation:
+  min_amplitude: 0.001
+  min_duration: 1.0
+  min_sample_rate: 8000
+celery:
+  broker_url: redis://localhost:6379/0
+  result_backend: redis://localhost:6379/0
+database:
+  path: data/database.db
+diarization:
+  enabled: false
+  hf_token: ''  # 从环境变量 HF_TOKEN 读取
+  max_speakers: 10
+  min_speakers: 1
+  model: pyannote/speaker-diarization-3.1
+  provider: pyannote
+download:
+  chunk_size: 8192
+  max_retries: 3
+  timeout: 30
+  user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+logging:
+  file: logs/app.log
+  level: INFO
+  retention: 7 days
+  rotation: 10 MB
+storage:
+  audio_dir: data/audio
+  keep_audio: true
+  note_dir: data/notes
+  transcript_dir: data/transcripts
+whisper:
+  api_provider: qwen
+  beam_size: 5
+  compute_type: int8
+  device: cpu
+  language: zh
+  model_size: tiny
+  openai_api_key: ''  # 从环境变量 OPENAI_API_KEY 读取
+  qwen_api_key: ''  # 从环境变量 QWEN_API_KEY 读取
+  qwen_model: paraformer-v2
+  vad_filter: true
