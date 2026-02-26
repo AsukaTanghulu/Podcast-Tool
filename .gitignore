@@ -45,7 +45,7 @@ data/database.db
 # 日志
 logs/*.log
 
-# 秘密文档
+# 文档
 docs/*
 
 # 模型文件
