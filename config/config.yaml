@@ -99,7 +99,7 @@ ai:
 
   # 通义千问配置
   qwen_api_key: ''  # 从环境变量 QWEN_API_KEY 读取
-  qwen_model: qwen-plus
+  qwen_model: qwen3.5-plus
 
   # DeepSeek 配置
   deepseek_api_key: ''  # 从环境变量 DEEPSEEK_API_KEY 读取
