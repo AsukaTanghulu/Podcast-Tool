@@ -26,10 +26,11 @@ class QwenTranscriber:
         初始化转录器
 
         Args:
-            config: 配置字典，需包含 api_key
+            config: 配置字典，需包含 api_key, model
         """
         self.config = config or {}
         self.api_key = self.config.get("api_key") or os.getenv("DASHSCOPE_API_KEY")
+        self.model = self.config.get("model", "paraformer-v2")
         self.language = self.config.get("language", "zh")
         self.paragraph_gap = self.config.get("paragraph_gap", 2.0)
 
@@ -40,7 +41,21 @@ class QwenTranscriber:
 
         # 设置 API Key
         dashscope.api_key = self.api_key
-        logger.info(f"通义千问转录器初始化成功")
+        logger.info(f"通义千问转录器初始化成功，使用模型: {self.model}")
+
+    def _parse_language_hints(self) -> List[str]:
+        """解析 language_hints，兼容 'zh,en' 或 ['zh', 'en']"""
+        raw = self.language
+        if raw is None:
+            return ['zh', 'en']
+        if isinstance(raw, list):
+            hints = [str(item).strip() for item in raw if str(item).strip()]
+            return hints or ['zh', 'en']
+        text = str(raw).strip()
+        if not text:
+            return ['zh', 'en']
+        hints = [part.strip() for part in text.split(',') if part.strip()]
+        return hints or ['zh', 'en']
 
     def transcribe(self, audio_path: str, audio_url: str = None) -> List[Dict[str, Any]]:
         """
@@ -70,16 +85,24 @@ class QwenTranscriber:
                 logger.info(f"使用音频 URL: {audio_url}")
                 file_urls = [audio_url]
             else:
-                # 如果没有 URL，抛出错误
-                error_msg = "通义千问 API 需要音频文件的 HTTP/HTTPS URL，无法使用本地文件路径"
-                logger.error(error_msg)
-                raise TranscriptionError(error_msg)
+                # 如果没有 URL，使用本地文件上传
+                logger.info(f"使用本地文件: {audio_path}")
+                if not Path(audio_path).exists():
+                    raise TranscriptionError(f"音频文件不存在: {audio_path}")
+
+                # 通义千问 API 支持直接上传本地文件
+                # 使用标准 file URI（Windows 下自动处理空格与路径分隔符）
+                file_urls = [Path(audio_path).resolve().as_uri()]
+                logger.info(f"使用本地文件路径: {file_urls[0]}")
+
+            language_hints = self._parse_language_hints()
 
             # 提交异步转录任务
             task_response = Transcription.async_call(
-                model='paraformer-v2',
+                model=self.model,  # 使用配置的模型
                 file_urls=file_urls,
-                language_hints=['zh']
+                language_hints=language_hints,
+                diarization_enabled=True  # 开启说话人分离功能，导出的结果会包含speaker_id字段,用于区分不同的说话人
             )
 
             if task_response.status_code != HTTPStatus.OK:
@@ -107,32 +130,33 @@ class QwenTranscriber:
                 raise TranscriptionError("API 返回结果为空")
 
             # 检查是否有转录结果 URL
+            paragraphs = []
             if 'results' in transcription_response.output:
                 results = transcription_response.output['results']
                 if results and len(results) > 0:
-                    result = results[0]
+                    import requests
 
-                    # 如果有 transcription_url，需要下载
-                    if 'transcription_url' in result:
-                        transcription_url = result['transcription_url']
-                        logger.info(f"下载转录结果: {transcription_url}")
+                    for result in results:
+                        if result.get('subtask_status') != 'SUCCEEDED':
+                            logger.warning(f"子任务失败，已跳过: {result}")
+                            continue
 
-                        import requests
-                        response = requests.get(transcription_url)
-                        transcription_data = response.json()
+                        # 如果有 transcription_url，需要下载
+                        if 'transcription_url' in result:
+                            transcription_url = result['transcription_url']
+                            logger.info(f"下载转录结果: {transcription_url}")
 
-                        # 处理转录数据
-                        paragraphs = self._process_transcription_data(transcription_data)
-                    elif 'sentences' in result:
-                        # 直接包含句子数据
-                        paragraphs = self._process_sentences(result['sentences'])
-                    else:
-                        logger.warning(f"未知的结果格式: {result}")
-                        paragraphs = []
-                else:
-                    paragraphs = []
-            else:
-                paragraphs = []
+                            response = requests.get(transcription_url)
+                            response.raise_for_status()
+                            transcription_data = response.json()
+
+                            # 处理转录数据
+                            paragraphs.extend(self._process_transcription_data(transcription_data))
+                        elif 'sentences' in result:
+                            # 直接包含句子数据
+                            paragraphs.extend(self._process_sentences(result['sentences']))
+                        else:
+                            logger.warning(f"未知的结果格式: {result}")
 
             elapsed_time = time.time() - start_time
             logger.info(
@@ -184,7 +208,8 @@ class QwenTranscriber:
         current_para = {
             "start": 0,
             "end": 0,
-            "text": ""
+            "text": "",
+            "speaker_id": None
         }
 
         for sentence in sentences:
@@ -195,19 +220,30 @@ class QwenTranscriber:
             # 转换时间单位：毫秒 -> 秒
             start = sentence.get('begin_time', 0) / 1000.0
             end = sentence.get('end_time', 0) / 1000.0
+            speaker_id = sentence.get('speaker_id', None)
 
-            # 如果间隔超过阈值，开始新段落
-            if start - current_para["end"] > self.paragraph_gap and current_para["text"]:
+            # 如果说话人变化（包括 None -> spk_x / spk_x -> None）或间隔超过阈值，开始新段落
+            current_speaker = current_para["speaker_id"]
+            speaker_changed = (
+                current_para["text"] and
+                speaker_id != current_speaker and
+                (speaker_id is not None or current_speaker is not None)
+            )
+            time_gap_exceeded = start - current_para["end"] > self.paragraph_gap
+
+            if (speaker_changed or time_gap_exceeded) and current_para["text"]:
                 paragraphs.append(current_para)
                 current_para = {
                     "start": start,
                     "end": end,
-                    "text": text
+                    "text": text,
+                    "speaker_id": speaker_id
                 }
             else:
                 # 合并到当前段落
                 if not current_para["text"]:
                     current_para["start"] = start
+                    current_para["speaker_id"] = speaker_id
                 current_para["end"] = end
                 current_para["text"] += text
 
@@ -262,7 +298,11 @@ class QwenTranscriber:
         for para in paragraphs:
             start_time = self._format_time(para["start"])
             end_time = self._format_time(para["end"])
+            speaker = para.get("speaker_id", "")
+
             lines.append(f"[{start_time} - {end_time}]")
+            if speaker:
+                lines.append(f"说话人: {speaker}")
             lines.append(para["text"])
             lines.append("")  # 空行
 

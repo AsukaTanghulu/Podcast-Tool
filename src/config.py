@@ -48,39 +48,46 @@ class Config:
 
     def _load_secrets_from_env(self, config: Dict[str, Any]):
         """从环境变量加载敏感信息（API Keys）"""
-        # API Keys 映射：环境变量名 -> 配置路径
+        # API Keys 映射：环境变量名 -> 配置路径列表（一个环境变量可以映射到多个配置位置）
         env_mappings = {
-            'QWEN_API_KEY': ['ai', 'qwen_api_key'],
-            'DEEPSEEK_API_KEY': ['ai', 'deepseek_api_key'],
-            'OPENAI_API_KEY': ['ai', 'openai_api_key'],
-            'CLAUDE_API_KEY': ['ai', 'claude_api_key'],
-            'DOUBAO_API_KEY': ['ai', 'doubao_api_key'],
-            'HF_TOKEN': ['diarization', 'hf_token'],
+            'QWEN_API_KEY': [
+                ['ai', 'qwen_api_key'],
+                ['whisper', 'qwen_api_key']
+            ],
+            'DEEPSEEK_API_KEY': [
+                ['ai', 'deepseek_api_key']
+            ],
+            'OPENAI_API_KEY': [
+                ['ai', 'openai_api_key'],
+                ['whisper', 'openai_api_key']
+            ],
+            'CLAUDE_API_KEY': [
+                ['ai', 'claude_api_key']
+            ],
+            'DOUBAO_API_KEY': [
+                ['ai', 'doubao_api_key']
+            ],
+            'HF_TOKEN': [
+                ['diarization', 'hf_token']
+            ],
         }
-
-        # Whisper API Keys
-        whisper_env_mappings = {
-            'QWEN_API_KEY': ['whisper', 'qwen_api_key'],
-            'OPENAI_API_KEY': ['whisper', 'openai_api_key'],
-        }
-
-        # 合并映射
-        env_mappings.update(whisper_env_mappings)
 
         # 从环境变量读取并覆盖配置
-        for env_var, config_path in env_mappings.items():
+        for env_var, config_paths in env_mappings.items():
             env_value = os.getenv(env_var)
             if env_value:
-                # 导航到配置的嵌套位置
-                current = config
-                for key in config_path[:-1]:
-                    if key not in current:
-                        current[key] = {}
-                    current = current[key]
+                # 将环境变量值设置到所有映射的配置路径
+                for config_path in config_paths:
+                    # 导航到配置的嵌套位置
+                    current = config
+                    for key in config_path[:-1]:
+                        if key not in current:
+                            current[key] = {}
+                        current = current[key]
 
-                # 设置值
-                current[config_path[-1]] = env_value
-                logger.debug(f"从环境变量加载: {env_var} -> {'.'.join(config_path)}")
+                    # 设置值
+                    current[config_path[-1]] = env_value
+                    logger.debug(f"从环境变量加载: {env_var} -> {'.'.join(config_path)}")
 
 
     def _default_config(self) -> Dict[str, Any]:

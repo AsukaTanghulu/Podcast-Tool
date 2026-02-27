@@ -17,20 +17,10 @@ sys.path.insert(0, str(Path(__file__).parent))
 from config import get_config
 from database import get_db
 from audio_fetcher import AudioFetcher, AudioFetchError, AudioQualityError
+from transcriber_qwen import QwenTranscriber, TranscriptionError
+from storage_manager import StorageManager
 
-# 根据配置选择转录器
-config_temp = get_config("config/config.yaml")
-api_provider = config_temp.get("whisper.api_provider", "local")
-
-if api_provider == "openai":
-    from transcriber_api import WhisperAPITranscriber, TranscriptionError
-    logger.info("使用 OpenAI Whisper API 模式")
-elif api_provider == "qwen":
-    from transcriber_qwen import QwenTranscriber, TranscriptionError
-    logger.info("使用通义千问 API 模式")
-else:
-    from transcriber import transcribe_with_retry, TranscriptionError
-    logger.info("使用本地 Whisper 模型")
+logger.info("使用通义千问 API 模式")
 
 
 def setup_logging(config):
@@ -92,108 +82,113 @@ def process_podcast(url: str, config, db):
             save_dir=config.get("storage.audio_dir")
         )
 
-        # 更新播客信息
+        # 更新播客信息（包括音频文件路径）
         db.update_podcast(
             podcast_id,
             audio_url=metadata["audio_url"],
             duration=int(metadata["duration"]),
             file_size=metadata["file_size"],
+            audio_file_path=audio_path,  # 保存音频文件路径
             status="transcribing"
         )
 
         logger.info(f"✓ 音频获取成功: {audio_path}")
 
-        # 3. 语音转录
+        # 3. 语音转录（仅使用通义千问 API）
         logger.info("=" * 50)
         logger.info("步骤 2/2: 语音转录")
         logger.info("=" * 50)
 
-        api_provider = config.get("whisper.api_provider", "local")
+        transcriber_config = {
+            "api_key": config.get("whisper.qwen_api_key"),
+            "language": config.get("whisper.language"),
+            "model": config.get("whisper.qwen_model", "paraformer-v2"),
+            "paragraph_gap": config.get("analyzer.paragraph_gap")
+        }
+        transcriber = QwenTranscriber(transcriber_config)
+        paragraphs = transcriber.transcribe(audio_path, audio_url=metadata["audio_url"])
+        model_name = f"qwen-{transcriber_config['model']}"
 
-        if api_provider == "openai":
-            # 使用 OpenAI Whisper API
-            transcriber_config = {
-                "api_key": config.get("whisper.openai_api_key"),
-                "language": config.get("whisper.language"),
-                "paragraph_gap": config.get("analyzer.paragraph_gap")
-            }
-            transcriber = WhisperAPITranscriber(transcriber_config)
-            paragraphs = transcriber.transcribe(audio_path)
-            model_name = "openai-whisper-api"
+        # 获取播客信息（包含栏目）
+        podcast = db.get_podcast(podcast_id)
+        category = podcast.get('category', '') if podcast else ''
 
-        elif api_provider == "qwen":
-            # 使用通义千问 API
-            transcriber_config = {
-                "api_key": config.get("whisper.qwen_api_key"),
-                "language": config.get("whisper.language"),
-                "model": config.get("whisper.qwen_model", "paraformer-v2"),
-                "paragraph_gap": config.get("analyzer.paragraph_gap")
-            }
-            transcriber = QwenTranscriber(transcriber_config)
-            paragraphs = transcriber.transcribe(audio_path, audio_url=metadata["audio_url"])
-            model_name = f"qwen-{transcriber_config['model']}"
+        # 初始化存储管理器
+        storage = StorageManager(config)
 
-        else:
-            # 使用本地模型
-            transcriber_config = {
-                "model_size": config.get("whisper.model_size"),
-                "device": config.get("whisper.device"),
-                "compute_type": config.get("whisper.compute_type"),
-                "language": config.get("whisper.language"),
-                "beam_size": config.get("whisper.beam_size"),
-                "vad_filter": config.get("whisper.vad_filter"),
-                "paragraph_gap": config.get("analyzer.paragraph_gap")
-            }
-            paragraphs = transcribe_with_retry(audio_path, transcriber_config)
-            from transcriber import Transcriber
-            transcriber = Transcriber(transcriber_config)
-            model_name = config.get("whisper.model_size")
-
-        # 生成 Markdown 和 PDF 格式
+        # 生成转录文件（JSON, Markdown, PDF）
         logger.info("=" * 50)
         logger.info("生成转录文件")
         logger.info("=" * 50)
 
         from transcript_formatter import format_transcript
+        import json
 
-        # 生成 Markdown 文件
-        transcript_filename = f"{podcast_id}.md"
-        transcript_path = Path(config.get("storage.transcript_dir")) / transcript_filename
+        # 1. 保存 JSON 格式（用于 Web 界面对话式布局）
+        transcript_json_path = storage.get_transcript_path(podcast_id, category, "json")
+        storage.ensure_directory(transcript_json_path)
+
+        json_data = {
+            "segments": paragraphs,
+            "metadata": {
+                "podcast_id": podcast_id,
+                "model": model_name,
+                "category": category or "未分类",
+                "speaker_names": {}  # 初始为空，用户可以通过 Web 界面重命名
+            },
+            "word_count": sum(len(p["text"]) for p in paragraphs),
+            "paragraph_count": len(paragraphs)
+        }
+
+        with open(transcript_json_path, 'w', encoding='utf-8') as f:
+            json.dump(json_data, f, ensure_ascii=False, indent=2)
+        logger.info(f"✓ JSON 文件: {transcript_json_path}")
+
+        # 2. 生成 Markdown 文件
+        transcript_md_path = storage.get_transcript_path(podcast_id, category, "md")
+        storage.ensure_directory(transcript_md_path)
 
         format_transcript(
             paragraphs,
             metadata={
                 "podcast_id": podcast_id,
-                "model": model_name
+                "model": model_name,
+                "category": category or "未分类",
+                "speaker_names": {}
             },
             output_format='markdown',
-            output_path=str(transcript_path)
+            output_path=str(transcript_md_path)
         )
-        logger.info(f"✓ Markdown 文件: {transcript_path}")
+        logger.info(f"✓ Markdown 文件: {transcript_md_path}")
 
-        # 生成 PDF 文件（可选，需要 reportlab 库）
+        # 3. 生成 PDF 文件（可选，需要 reportlab 库）
+        pdf_path = None
         try:
-            pdf_path = str(transcript_path).replace('.md', '.pdf')
+            transcript_pdf_path = storage.get_transcript_path(podcast_id, category, "pdf")
+            storage.ensure_directory(transcript_pdf_path)
+
             format_transcript(
                 paragraphs,
                 metadata={
                     "podcast_id": podcast_id,
-                    "model": model_name
+                    "model": model_name,
+                    "category": category or "未分类"
                 },
                 output_format='pdf',
-                output_path=pdf_path
+                output_path=str(transcript_pdf_path)
             )
-            logger.info(f"✓ PDF 文件: {pdf_path}")
+            pdf_path = transcript_pdf_path
+            logger.info(f"✓ PDF 文件: {transcript_pdf_path}")
         except ImportError:
             logger.warning("⚠ 未安装 reportlab，跳过 PDF 生成。安装方法: pip install reportlab")
         except Exception as e:
             logger.warning(f"⚠ PDF 生成失败: {e}")
 
-        # 创建转录记录
+        # 创建转录记录（保存 JSON 路径，用于 Web 界面）
         word_count = sum(len(p["text"]) for p in paragraphs)
         db.create_transcript(
             podcast_id,
-            str(transcript_path),
+            str(transcript_json_path),  # 保存 JSON 路径
             word_count=word_count,
             model_version=model_name
         )
@@ -203,14 +198,19 @@ def process_podcast(url: str, config, db):
 
         logger.info(f"✓ 语音转录成功")
         logger.info(f"✓ 转录字数: {word_count}")
+        if category:
+            logger.info(f"✓ 栏目分类: {category}")
 
         # 4. 显示结果摘要
         logger.info("=" * 50)
         logger.info("处理完成")
         logger.info("=" * 50)
         logger.info(f"播客 ID: {podcast_id}")
+        logger.info(f"栏目: {category or '未分类'}")
         logger.info(f"音频文件: {audio_path}")
-        logger.info(f"转录文件: {transcript_path}")
+        logger.info(f"Markdown 文件: {transcript_md_path}")
+        if pdf_path:
+            logger.info(f"PDF 文件: {pdf_path}")
         logger.info(f"段落数量: {len(paragraphs)}")
         logger.info(f"总字数: {word_count}")
 
@@ -239,6 +239,169 @@ def process_podcast(url: str, config, db):
     except Exception as e:
         logger.error(f"✗ 处理失败: {e}")
         db.update_podcast(podcast_id, status="failed", error_message=str(e))
+        raise
+
+
+def process_documentary(file_path: str, documentary_id: str, config, db):
+    """
+    处理纪录片的完整流程
+
+    Args:
+        file_path: 上传的文件路径
+        documentary_id: 纪录片 ID
+        config: 配置对象
+        db: 数据库对象
+    """
+    logger.info(f"开始处理纪录片: {documentary_id}")
+
+    try:
+        # 1. 更新状态为转录中
+        db.update_podcast(documentary_id, status="transcribing")
+
+        # 2. 语音转录（使用通义千问 API）
+        logger.info("=" * 50)
+        logger.info("语音转录")
+        logger.info("=" * 50)
+
+        transcriber_config = {
+            "api_key": config.get("whisper.qwen_api_key"),
+            "language": config.get("whisper.language"),
+            "model": config.get("whisper.qwen_model", "paraformer-v2"),
+            "paragraph_gap": config.get("analyzer.paragraph_gap")
+        }
+        transcriber = QwenTranscriber(transcriber_config)
+
+        # 对于本地文件，需要先上传到 OSS 或使用文件 URL
+        # 这里我们直接传递本地文件路径，transcriber 会处理
+        paragraphs = transcriber.transcribe(file_path)
+        model_name = f"qwen-{transcriber_config['model']}"
+
+        # 获取纪录片信息（包含栏目）
+        documentary = db.get_podcast(documentary_id)
+        category = documentary.get('category', '') if documentary else ''
+        title = documentary.get('title', '未命名纪录片') if documentary else '未命名纪录片'
+
+        # 初始化存储管理器
+        storage = StorageManager(config)
+
+        # 生成转录文件（JSON, Markdown, PDF）
+        logger.info("=" * 50)
+        logger.info("生成转录文件")
+        logger.info("=" * 50)
+
+        from transcript_formatter import format_transcript
+        import json
+
+        # 1. 保存 JSON 格式（用于 Web 界面对话式布局）
+        transcript_json_path = storage.get_transcript_path(documentary_id, category, "json")
+        storage.ensure_directory(transcript_json_path)
+
+        json_data = {
+            "segments": paragraphs,
+            "metadata": {
+                "podcast_id": documentary_id,
+                "title": title,
+                "model": model_name,
+                "category": category or "未分类",
+                "content_type": "documentary",
+                "speaker_names": {}
+            },
+            "word_count": sum(len(p["text"]) for p in paragraphs),
+            "paragraph_count": len(paragraphs)
+        }
+
+        with open(transcript_json_path, 'w', encoding='utf-8') as f:
+            json.dump(json_data, f, ensure_ascii=False, indent=2)
+        logger.info(f"✓ JSON 文件: {transcript_json_path}")
+
+        # 2. 生成 Markdown 文件
+        transcript_md_path = storage.get_transcript_path(documentary_id, category, "md")
+        storage.ensure_directory(transcript_md_path)
+
+        format_transcript(
+            paragraphs,
+            metadata={
+                "podcast_id": documentary_id,
+                "title": title,
+                "model": model_name,
+                "category": category or "未分类",
+                "content_type": "documentary",
+                "speaker_names": {}
+            },
+            output_format='markdown',
+            output_path=str(transcript_md_path)
+        )
+        logger.info(f"✓ Markdown 文件: {transcript_md_path}")
+
+        # 3. 生成 PDF 文件（可选）
+        pdf_path = None
+        try:
+            transcript_pdf_path = storage.get_transcript_path(documentary_id, category, "pdf")
+            storage.ensure_directory(transcript_pdf_path)
+
+            format_transcript(
+                paragraphs,
+                metadata={
+                    "podcast_id": documentary_id,
+                    "title": title,
+                    "model": model_name,
+                    "category": category or "未分类",
+                    "content_type": "documentary"
+                },
+                output_format='pdf',
+                output_path=str(transcript_pdf_path)
+            )
+            pdf_path = transcript_pdf_path
+            logger.info(f"✓ PDF 文件: {transcript_pdf_path}")
+        except ImportError:
+            logger.warning("⚠ 未安装 reportlab，跳过 PDF 生成。安装方法: pip install reportlab")
+        except Exception as e:
+            logger.warning(f"⚠ PDF 生成失败: {e}")
+
+        # 创建转录记录（保存 JSON 路径）
+        word_count = sum(len(p["text"]) for p in paragraphs)
+        db.create_transcript(
+            documentary_id,
+            str(transcript_json_path),  # 保存 JSON 路径
+            word_count=word_count,
+            model_version=model_name
+        )
+
+        # 更新纪录片状态
+        db.update_podcast(
+            documentary_id,
+            status="completed",
+            title=title
+        )
+
+        logger.info(f"✓ 语音转录成功")
+        logger.info(f"✓ 转录字数: {word_count}")
+        if category:
+            logger.info(f"✓ 栏目分类: {category}")
+
+        # 显示结果摘要
+        logger.info("=" * 50)
+        logger.info("处理完成")
+        logger.info("=" * 50)
+        logger.info(f"纪录片 ID: {documentary_id}")
+        logger.info(f"标题: {title}")
+        logger.info(f"栏目: {category or '未分类'}")
+        logger.info(f"Markdown 文件: {transcript_md_path}")
+        if pdf_path:
+            logger.info(f"PDF 文件: {pdf_path}")
+        logger.info(f"段落数量: {len(paragraphs)}")
+        logger.info(f"总字数: {word_count}")
+
+        return documentary_id
+
+    except TranscriptionError as e:
+        logger.error(f"✗ 语音转录失败: {e}")
+        db.update_podcast(documentary_id, status="failed", error_message=str(e))
+        raise
+
+    except Exception as e:
+        logger.error(f"✗ 处理失败: {e}")
+        db.update_podcast(documentary_id, status="failed", error_message=str(e))
         raise
 
 

@@ -69,7 +69,7 @@ class TranscriptFormatter:
                    metadata: Dict[str, Any] = None,
                    output_path: str = None) -> str:
         """
-        将转录结果转换为 Markdown 格式
+        将转录结果转换为 Markdown 格式（对话式布局）
 
         Args:
             segments: 段落列表
@@ -81,6 +81,16 @@ class TranscriptFormatter:
         """
         lines = []
 
+        # 获取说话人名称映射
+        speaker_names = metadata.get('speaker_names', {}) if metadata else {}
+
+        # 统计说话人数量
+        speakers = set()
+        for segment in segments:
+            speaker_id = segment.get('speaker_id')
+            if speaker_id:
+                speakers.add(speaker_id)
+
         # 添加标题和元数据
         if metadata:
             lines.append(f"# 播客转录\n")
@@ -88,22 +98,31 @@ class TranscriptFormatter:
                 lines.append(f"**播客 ID**: {metadata['podcast_id']}\n")
             if metadata.get('model'):
                 lines.append(f"**转录模型**: {metadata['model']}\n")
+            if speakers:
+                # 显示说话人信息
+                speaker_list = []
+                for speaker_id in sorted(speakers):
+                    speaker_key = str(speaker_id)
+                    speaker_name = speaker_names.get(speaker_key, speaker_names.get(speaker_id, speaker_key))
+                    speaker_list.append(str(speaker_name))
+                lines.append(f"**说话人**: {', '.join(speaker_list)}\n")
             lines.append("\n---\n")
 
-        # 处理每个段落
-        for i, segment in enumerate(segments, 1):
+        # 处理每个段落（对话式布局）
+        for segment in segments:
             start_time = self.format_time(segment['start'])
             end_time = self.format_time(segment['end'])
+            speaker_id = segment.get('speaker_id', 'unknown')
+            speaker_key = str(speaker_id)
 
-            # 添加时间戳标题
-            lines.append(f"\n## 段落 {i} [{start_time} - {end_time}]\n")
+            # 获取说话人名称（如果有自定义名称则使用，否则使用 speaker_id）
+            speaker_name = speaker_names.get(speaker_key, speaker_names.get(speaker_id, speaker_key))
 
-            # 将段落文本切分成句子
-            sentences = self.split_into_sentences(segment['text'])
+            # 对话式布局：**[时间] 说话人**
+            lines.append(f"\n**[{start_time} - {end_time}] {speaker_name}**\n")
 
-            # 每句话一行，使用列表格式
-            for sentence in sentences:
-                lines.append(f"- {sentence}\n")
+            # 使用引用块显示对话内容
+            lines.append(f"> {segment['text']}\n")
 
         markdown_text = "".join(lines)
 
@@ -207,34 +226,50 @@ class TranscriptFormatter:
         story.append(Paragraph("播客转录", title_style))
         story.append(Spacer(1, 0.5*cm))
 
+        # 获取说话人名称映射
+        speaker_names = metadata.get('speaker_names', {}) if metadata else {}
+
+        # 统计说话人
+        speakers = set()
+        for segment in segments:
+            speaker_id = segment.get('speaker_id')
+            if speaker_id:
+                speakers.add(speaker_id)
+
         # 添加元数据
         if metadata:
             if metadata.get('podcast_id'):
                 story.append(Paragraph(f"<b>播客 ID:</b> {metadata['podcast_id']}", body_style))
             if metadata.get('model'):
                 story.append(Paragraph(f"<b>转录模型:</b> {metadata['model']}", body_style))
+            if speakers:
+                speaker_list = []
+                for speaker_id in sorted(speakers):
+                    speaker_key = str(speaker_id)
+                    speaker_name = speaker_names.get(speaker_key, speaker_names.get(speaker_id, speaker_key))
+                    speaker_list.append(str(speaker_name))
+                story.append(Paragraph(f"<b>说话人:</b> {', '.join(speaker_list)}", body_style))
             story.append(Spacer(1, 0.5*cm))
 
-        # 处理每个段落
-        for i, segment in enumerate(segments, 1):
+        # 处理每个段落（对话式布局）
+        for segment in segments:
             start_time = self.format_time(segment['start'])
             end_time = self.format_time(segment['end'])
+            speaker_id = segment.get('speaker_id', 'unknown')
+            speaker_key = str(speaker_id)
 
-            # 添加段落标题
+            # 获取说话人名称
+            speaker_name = speaker_names.get(speaker_key, speaker_names.get(speaker_id, speaker_key))
+
+            # 添加说话人和时间戳
             story.append(Paragraph(
-                f"段落 {i} [{start_time} - {end_time}]",
+                f"<b>[{start_time} - {end_time}] {speaker_name}</b>",
                 heading_style
             ))
-            story.append(Spacer(1, 0.3*cm))
+            story.append(Spacer(1, 0.2*cm))
 
-            # 将段落文本切分成句子
-            sentences = self.split_into_sentences(segment['text'])
-
-            # 每句话一行
-            for sentence in sentences:
-                story.append(Paragraph(f"• {sentence}", body_style))
-                story.append(Spacer(1, 0.2*cm))
-
+            # 添加对话内容
+            story.append(Paragraph(segment['text'], body_style))
             story.append(Spacer(1, 0.5*cm))
 
         # 生成 PDF

@@ -200,15 +200,8 @@ def create_ai_generator(provider: str, config: Dict[str, Any]) -> AINotGenerator
             'timeout': config.get('timeout', 60)
         })
     elif provider == 'claude':
-        # Claude API 使用不同的 SDK，这里暂时用 OpenAI 兼容格式
-        return AINotGenerator({
-            'api_key': config.get('claude_api_key'),
-            'model': config.get('claude_model', 'claude-3-sonnet-20240229'),
-            'base_url': 'https://api.anthropic.com',
-            'max_tokens': config.get('max_tokens', 2000),
-            'temperature': config.get('temperature', 0.7),
-            'timeout': config.get('timeout', 60)
-        })
+        # Claude API 不兼容 OpenAI SDK，暂不支持
+        raise ValueError("Claude 暂不支持，因为其 API 不兼容 OpenAI SDK。请使用 qwen、deepseek 或 openai。")
     elif provider == 'openai':
         return AINotGenerator({
             'api_key': config.get('openai_api_key'),

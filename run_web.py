@@ -26,4 +26,5 @@ if __name__ == '__main__':
     logger.info("按 Ctrl+C 停止服务器")
     logger.info("=" * 50)
 
-    app.run(host=host, port=port, debug=debug)
+    # 禁用自动重载，避免中断长时间运行的任务
+    app.run(host=host, port=port, debug=debug, use_reloader=False)

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据库编辑器</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #f8f9fa; }
+        .sql-box { min-height: 180px; font-family: Consolas, Monaco, monospace; }
+        .result-table-wrap { max-height: 520px; overflow: auto; }
+        .mono { font-family: Consolas, Monaco, monospace; }
+    </style>
+</head>
+<body>
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">数据库编辑器</h4>
+        <a class="btn btn-outline-secondary btn-sm" href="/">返回主页</a>
+    </div>
+
+    <div class="alert alert-warning">
+        请谨慎操作：本页面会直接修改数据库内容，操作不可自动回滚。
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <label for="sqlInput" class="form-label fw-semibold">SQL 语句（单条）</label>
+            <textarea id="sqlInput" class="form-control sql-box" placeholder="例如：SELECT * FROM podcasts ORDER BY created_at DESC LIMIT 20;"></textarea>
+
+            <label for="paramsInput" class="form-label fw-semibold mt-3">参数（JSON 数组，可选）</label>
+            <input id="paramsInput" class="form-control mono" value="[]" placeholder='例如：["new-title", "podcast-id"]'>
+
+            <div class="d-flex gap-2 mt-3">
+                <button id="runBtn" class="btn btn-primary">执行 SQL</button>
+                <button id="sampleSelect" class="btn btn-outline-secondary">示例：查询表</button>
+                <button id="sampleUpdate" class="btn btn-outline-secondary">示例：修改标题</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="msgBox" class="alert d-none"></div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="mb-0">执行结果</h6>
+                <small id="metaInfo" class="text-muted"></small>
+            </div>
+            <pre id="rawResult" class="bg-light p-3 rounded d-none"></pre>
+            <div id="tableWrap" class="result-table-wrap"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+const sqlInput = document.getElementById('sqlInput');
+const paramsInput = document.getElementById('paramsInput');
+const runBtn = document.getElementById('runBtn');
+const sampleSelect = document.getElementById('sampleSelect');
+const sampleUpdate = document.getElementById('sampleUpdate');
+const msgBox = document.getElementById('msgBox');
+const tableWrap = document.getElementById('tableWrap');
+const rawResult = document.getElementById('rawResult');
+const metaInfo = document.getElementById('metaInfo');
+
+sampleSelect.addEventListener('click', () => {
+    sqlInput.value = "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;";
+    paramsInput.value = '[]';
+});
+
+sampleUpdate.addEventListener('click', () => {
+    sqlInput.value = 'UPDATE podcasts SET title = ? WHERE id = ?;';
+    paramsInput.value = '["新的标题", "podcast_id_here"]';
+});
+
+runBtn.addEventListener('click', runSQL);
+
+async function runSQL() {
+    const sql = sqlInput.value.trim();
+    if (!sql) {
+        showMsg('danger', '请先输入 SQL');
+        return;
+    }
+
+    let params = [];
+    try {
+        params = JSON.parse(paramsInput.value || '[]');
+        if (!Array.isArray(params)) {
+            showMsg('danger', '参数必须是 JSON 数组');
+            return;
+        }
+    } catch (e) {
+        showMsg('danger', '参数 JSON 格式错误');
+        return;
+    }
+
+    runBtn.disabled = true;
+    runBtn.textContent = '执行中...';
+    showMsg('info', '正在执行 SQL...');
+    tableWrap.innerHTML = '';
+    rawResult.classList.add('d-none');
+    metaInfo.textContent = '';
+
+    try {
+        const resp = await fetch('/api/admin/sql', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sql, params })
+        });
+
+        const result = await resp.json();
+        if (!result.success) {
+            showMsg('danger', result.error || '执行失败');
+            return;
+        }
+
+        showMsg('success', '执行成功');
+        renderResult(result.data);
+    } catch (e) {
+        showMsg('danger', '请求失败: ' + e.message);
+    } finally {
+        runBtn.disabled = false;
+        runBtn.textContent = '执行 SQL';
+    }
+}
+
+function renderResult(data) {
+    if (data.type === 'query') {
+        metaInfo.textContent = `返回 ${data.row_count} 行`;
+        renderTable(data.rows || []);
+        rawResult.textContent = JSON.stringify(data, null, 2);
+        rawResult.classList.remove('d-none');
+        return;
+    }
+
+    metaInfo.textContent = `影响 ${data.affected_rows ?? 0} 行`;
+    rawResult.textContent = JSON.stringify(data, null, 2);
+    rawResult.classList.remove('d-none');
+}
+
+function renderTable(rows) {
+    if (!rows.length) {
+        tableWrap.innerHTML = '<p class="text-muted mb-0">无数据</p>';
+        return;
+    }
+
+    const columns = Object.keys(rows[0]);
+    const thead = '<thead><tr>' + columns.map(c => `<th>${escapeHtml(c)}</th>`).join('') + '</tr></thead>';
+    const tbody = '<tbody>' + rows.map(r => {
+        const tds = columns.map(c => `<td class="mono">${escapeHtml(String(r[c] ?? ''))}</td>`).join('');
+        return `<tr>${tds}</tr>`;
+    }).join('') + '</tbody>';
+
+    tableWrap.innerHTML = `<table class="table table-sm table-bordered table-hover">${thead}${tbody}</table>`;
+}
+
+function showMsg(type, text) {
+    msgBox.className = `alert alert-${type}`;
+    msgBox.textContent = text;
+    msgBox.classList.remove('d-none');
+}
+
+function escapeHtml(str) {
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+</script>
+</body>
+</html>

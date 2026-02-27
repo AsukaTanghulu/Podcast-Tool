@@ -1,68 +1,118 @@
-ai:
-  claude_api_key: ''  # 从环境变量 CLAUDE_API_KEY 读取
-  claude_model: claude-3-sonnet-20240229
-  deepseek_api_key: ''  # 从环境变量 DEEPSEEK_API_KEY 读取
-  deepseek_model: deepseek-chat
-  default_provider: deepseek
-  doubao_api_key: ''  # 从环境变量 DOUBAO_API_KEY 读取
-  doubao_model: doubao-pro-32k
-  max_tokens: 2000
-  openai_api_key: ''  # 从环境变量 OPENAI_API_KEY 读取
-  openai_model: gpt-3.5-turbo
-  qwen_api_key: ''  # 从环境变量 QWEN_API_KEY 读取
-  qwen_model: qwen-plus
-  temperature: 0.7
-  timeout: 60
-analyzer:
-  min_sentence_length: 10
-  paragraph_gap: 2.0
-  top_keywords: 10
-  top_sentences: 5
+# ==========================================
+# 应用配置
+# ==========================================
 app:
-  debug: true
-  host: 127.0.0.1
   name: 播客分析工具
+  version: 3.5.0
+  host: 127.0.0.1
   port: 5000
-  version: 1.0.0
-audio_validation:
-  min_amplitude: 0.001
-  min_duration: 1.0
-  min_sample_rate: 8000
-celery:
-  broker_url: redis://localhost:6379/0
-  result_backend: redis://localhost:6379/0
+  debug: false  # 关闭 debug 模式，避免自动重载中断长时间任务
+
+# ==========================================
+# 数据库配置
+# ==========================================
 database:
   path: data/database.db
-diarization:
-  enabled: false
-  hf_token: ''  # 从环境变量 HF_TOKEN 读取
-  max_speakers: 10
-  min_speakers: 1
-  model: pyannote/speaker-diarization-3.1
-  provider: pyannote
-download:
-  chunk_size: 8192
-  max_retries: 3
-  timeout: 30
-  user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+
+# ==========================================
+# 存储配置
+# ==========================================
+storage:
+  # 基础目录
+  base_dir: data
+  audio_dir: data/audio
+  transcript_dir: data/transcripts
+  note_dir: data/notes
+  keep_audio: true
+
+  # 按栏目分类存储
+  category_based: true  # 是否按栏目分类存储
+  default_category: 未分类  # 默认栏目名称
+
+  # 文件类型分类
+  separate_formats: true  # 是否分开存储不同格式
+  # 存储结构：data/transcripts/{category}/md/ 和 data/transcripts/{category}/pdf/
+
+# ==========================================
+# 日志配置
+# ==========================================
 logging:
   file: logs/app.log
   level: INFO
-  retention: 7 days
   rotation: 10 MB
-storage:
-  audio_dir: data/audio
-  keep_audio: true
-  note_dir: data/notes
-  transcript_dir: data/transcripts
+  retention: 7 days
+
+# ==========================================
+# 音频下载配置
+# ==========================================
+download:
+  timeout: 30
+  max_retries: 3
+  chunk_size: 8192
+  user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+
+# ==========================================
+# 音频验证配置
+# ==========================================
+audio_validation:
+  min_duration: 1.0
+  min_sample_rate: 8000
+  min_amplitude: 0.001
+
+# ==========================================
+# 语音转录配置（通义千问 API）
+# ==========================================
 whisper:
-  api_provider: qwen
-  beam_size: 5
-  compute_type: int8
-  device: cpu
-  language: zh
-  model_size: tiny
-  openai_api_key: ''  # 从环境变量 OPENAI_API_KEY 读取
   qwen_api_key: ''  # 从环境变量 QWEN_API_KEY 读取
-  qwen_model: paraformer-v2
-  vad_filter: true
+  qwen_model: paraformer-8k-v2  # 可选模型见下方说明
+  language: zh,en  # 语言：zh（中文）、en（英文）
+
+  # 可用模型列表：
+  # Paraformer 系列（推荐，性价比高）：
+  #   - paraformer-v2        # 最新版本，支持中英文混合，0.00008元/秒
+  #   - paraformer-8k-v2     # 8kHz 采样率版本，0.00008元/秒
+  #   - paraformer-v1        # 旧版本，0.00008元/秒
+  #   - paraformer-8k-v1     # 8kHz 采样率旧版本，0.00008元/秒
+  #
+  # Fun-ASR 系列（精度更高，价格稍贵）：
+  #   - fun-asr              # 最新版本，0.00022元/秒
+  #   - fun-asr-2025-11-07   # 指定日期版本，0.00022元/秒
+  #   - fun-asr-2025-08-25   # 指定日期版本，0.00022元/秒
+
+# ==========================================
+# 文本分析配置
+# ==========================================
+analyzer:
+  paragraph_gap: 2.0  # 段落间隔（秒）
+  top_keywords: 10    # 提取关键词数量
+  top_sentences: 5    # 提取关键句数量
+  min_sentence_length: 10  # 最小句子长度
+
+# ==========================================
+# AI 笔记生成配置
+# ==========================================
+ai:
+  default_provider: qwen  # 默认 AI 提供商：qwen/deepseek/openai/claude/doubao
+  temperature: 0.7
+  max_tokens: 2000
+  timeout: 60
+
+  # 通义千问配置
+  qwen_api_key: ''  # 从环境变量 QWEN_API_KEY 读取
+  qwen_model: qwen-plus
+
+  # DeepSeek 配置
+  deepseek_api_key: ''  # 从环境变量 DEEPSEEK_API_KEY 读取
+  deepseek_model: deepseek-chat
+
+  # OpenAI 配置（可选）
+  openai_api_key: ''  # 从环境变量 OPENAI_API_KEY 读取
+  openai_model: gpt-3.5-turbo
+
+  # Claude 配置（可选）
+  claude_api_key: ''  # 从环境变量 CLAUDE_API_KEY 读取
+  claude_model: claude-3-sonnet-20240229
+
+  # 豆包配置（可选）
+  doubao_api_key: ''  # 从环境变量 DOUBAO_API_KEY 读取
+  doubao_model: doubao-pro-32k

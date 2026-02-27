@@ -236,3 +236,112 @@ body {
     text-decoration: underline;
 }
 
+/* 转录视图样式 */
+.transcript-viewer {
+    padding: 1rem 0;
+}
+
+.transcript-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+}
+
+.transcript-content {
+    padding: 1rem 0;
+}
+
+.transcript-segment {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.segment-bubble {
+    transition: all 0.3s ease;
+}
+
+.segment-bubble:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.segment-start {
+    margin-right: auto;
+}
+
+.segment-end {
+    margin-left: auto;
+}
+
+.segment-header {
+    font-size: 0.875rem;
+}
+
+.segment-text {
+    font-size: 1rem;
+    line-height: 1.6;
+    border-left: 3px solid currentColor;
+    word-wrap: break-word;
+}
+
+/* 说话人颜色主题 */
+.bg-primary.bg-opacity-10 {
+    background-color: rgba(13, 110, 253, 0.1) !important;
+    border-color: #0d6efd !important;
+}
+
+.bg-success.bg-opacity-10 {
+    background-color: rgba(25, 135, 84, 0.1) !important;
+    border-color: #198754 !important;
+}
+
+.bg-info.bg-opacity-10 {
+    background-color: rgba(13, 202, 240, 0.1) !important;
+    border-color: #0dcaf0 !important;
+}
+
+.bg-warning.bg-opacity-10 {
+    background-color: rgba(255, 193, 7, 0.1) !important;
+    border-color: #ffc107 !important;
+}
+
+.bg-secondary.bg-opacity-10 {
+    background-color: rgba(108, 117, 125, 0.1) !important;
+    border-color: #6c757d !important;
+}
+
+/* 搜索高亮 */
+.highlight {
+    background-color: yellow;
+    font-weight: bold;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .segment-bubble {
+        max-width: 90% !important;
+    }
+
+    .transcript-toolbar .btn-group {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .transcript-toolbar .btn {
+        width: 100%;
+        margin-bottom: 0.5rem;
+    }
+}
+

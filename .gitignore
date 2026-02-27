@@ -36,10 +36,14 @@ ENV/
 data/audio/*.m4a
 data/audio/*.mp3
 data/audio/*.wav
-data/transcripts/*.json
-data/transcripts/*.pdf
-data/transcripts/*.md
-data/notes/*.md
+data/transcripts/*
+!data/transcripts/.gitkeep
+data/notes/*
+!data/notes/.gitkeep
+data/uploads/*
+!data/uploads/.gitkeep
+data/video/*
+!data/video/.gitkeep
 data/database.db
 
 # 日志

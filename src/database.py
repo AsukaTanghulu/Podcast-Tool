@@ -127,6 +127,42 @@ class Database:
             """)
             logger.info("添加 has_diarization 字段到 transcripts 表")
 
+        # 检查并添加 category 字段到 podcasts 表
+        cursor.execute("PRAGMA table_info(podcasts)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if 'category' not in columns:
+            cursor.execute("""
+                ALTER TABLE podcasts ADD COLUMN category TEXT DEFAULT ''
+            """)
+            logger.info("添加 category 字段到 podcasts 表")
+
+        # 检查并添加 content_type 字段到 podcasts 表（区分播客和纪录片）
+        cursor.execute("PRAGMA table_info(podcasts)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if 'content_type' not in columns:
+            cursor.execute("""
+                ALTER TABLE podcasts ADD COLUMN content_type TEXT DEFAULT 'podcast'
+            """)
+            logger.info("添加 content_type 字段到 podcasts 表")
+
+        # 检查并添加 original_filename 字段到 podcasts 表（保存上传文件的原始文件名）
+        cursor.execute("PRAGMA table_info(podcasts)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if 'original_filename' not in columns:
+            cursor.execute("""
+                ALTER TABLE podcasts ADD COLUMN original_filename TEXT DEFAULT ''
+            """)
+            logger.info("添加 original_filename 字段到 podcasts 表")
+
+        # 检查并添加 audio_file_path 字段到 podcasts 表（保存音频文件路径）
+        cursor.execute("PRAGMA table_info(podcasts)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if 'audio_file_path' not in columns:
+            cursor.execute("""
+                ALTER TABLE podcasts ADD COLUMN audio_file_path TEXT DEFAULT ''
+            """)
+            logger.info("添加 audio_file_path 字段到 podcasts 表")
+
         self.conn.commit()
         logger.info("数据库表初始化完成")
 
@@ -410,6 +446,27 @@ class Database:
             笔记列表
         """
         return self.get_notes(podcast_id)
+
+    def delete_note(self, note_id: int) -> bool:
+        """
+        删除单条笔记记录（仅删除数据库记录，不删除文件）
+
+        Args:
+            note_id: 笔记记录 ID
+
+        Returns:
+            是否删除成功
+        """
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("DELETE FROM notes WHERE id = ?", (note_id,))
+            self.conn.commit()
+            logger.info(f"删除笔记记录: note_id={note_id}, affected={cursor.rowcount}")
+            return cursor.rowcount > 0
+        except Exception as e:
+            logger.error(f"删除笔记记录失败: {e}")
+            self.conn.rollback()
+            return False
 
     # ==================== 任务相关操作 ====================
 
