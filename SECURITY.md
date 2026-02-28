@@ -136,7 +136,7 @@ python test_api_config.py
 假设你只使用通义千问，你的 `.env` 文件应该是：
 
 ```env
-QWEN_API_KEY=sk-f0a66c84c96e4412a5f954d1d5b1e130
+QWEN_API_KEY= xxx
 ```
 
 其他不需要的 API Key 可以不填写。
